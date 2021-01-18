@@ -1,10 +1,20 @@
-# nvim-goimports
+# nvim-format
 
-Format buffer with [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports). Install goimports using `go get`:
+Format the current buffer.
 
-    go get golang.org/x/tools/cmd/goimports
+Suggested use:
 
-Format the current Go buffer with the command `Fmt`.
+    autocmd FileType ft command! -buffer -nargs=0 Fmt lua require"format".formatter()
 
+### Go imports
 
+Install: `go get golang.org/x/tools/cmd/goimports` 
+
+Command: `:lua require"format".goimports()`
+
+### Python Black
+
+Install: [See the Black documentation](https://github.com/psf/black#installation-and-usage). 
+
+Command: `:lua require"format".black()`
 
