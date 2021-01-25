@@ -1,11 +1,15 @@
--- apply_diff applies the unified diff output in lines to the current buffer.
-function apply_diff(lines)
+-- Buffer formatting tools.
+
+-- apply_unified_diff applies unified diff output in lines to the current
+-- buffer. See https://en.wikipedia.org/wiki/Diff#Unified_format for a
+-- description of unified diff.
+local function apply_unified_diff(lines)
 
     -- Collect diff hunks.
 
     local hunks = {}
     local hunk
-    for i, line in ipairs(lines) do
+    for _, line in ipairs(lines) do
         local lnum = line:match("^@@ %-(%d+)")
         if lnum then
             hunk = {lnum=lnum, del={}, repl={}}
@@ -25,7 +29,7 @@ function apply_diff(lines)
     -- Apply entire hunks in reverse order.
 
     for i = #hunks, 1, -1 do
-        local hunk = hunks[i]
+        hunk = hunks[i]
 
         -- Trim common suffix.
         while #hunk.del > 0 and (hunk.del[#hunk.del] == hunk.repl[#hunk.repl]) do
@@ -44,8 +48,17 @@ function apply_diff(lines)
     end
 end
 
-function show_qfl(qfl)
+-- show_error displays the error in lines through quick fix or the error buffer.
+local function show_error(lines, qffn)
+    local qfl = {}
+    for _, line in ipairs(lines) do
+        local qf = qffn(line)
+        if qf then
+            qfl[#qfl+1] = qf
+        end
+    end
     if #qfl == 0 then
+        vim.api.nvim_err_writeln(table.concat(lines, "\n"))
         return
     end
     vim.fn.setqflist(qfl)
@@ -55,54 +68,41 @@ end
 -- goimports formats the current buffer with goimports.
 local function goimports()
 
-    -- Get unified diff between buffer and formatted buffer.
-
     local bufnr = vim.api.nvim_get_current_buf()
     local cmd = {"goimports", "-d", "-srcdir", vim.api.nvim_buf_get_name(bufnr)}
     local lines = vim.fn.systemlist(cmd, vim.api.nvim_get_current_buf())
 
-    -- Error?
-
     if vim.v.shell_error ~= 0 then
-        local qfl = {}
-        for i, line in ipairs(lines) do
+        show_error(lines, function(line)
             local lnum, col, text = line:match("^.+:(%d+):(%d+):%s+(.*)")
             if lnum ~= "" then
-                qfl[#qfl+1] = {bufnr=bufnr, lnum=tonumber(lnum), col=col, text=text, type="E"}
+                return {bufnr=bufnr, lnum=tonumber(lnum), col=col, text=text, type="E"}
             end
-        end
-        show_qfl(qfl)
+        end)
         return
     end
 
-    apply_diff(lines)
+    apply_unified_diff(lines)
 end
 
 -- black formats the current buffer with black.
 local function black()
 
-    -- Get unified diff between buffer and formatted buffer.
-
     local bufnr = vim.api.nvim_get_current_buf()
     local cmd = {"black", "--diff", "--quiet", "-"}
     local lines = vim.fn.systemlist(cmd, vim.api.nvim_get_current_buf())
 
-
     if vim.v.shell_error ~= 0 then
-        local qfl = {}
-        for i, line in ipairs(lines) do
+        show_error(lines, function(line)
             local m1, lnum, col, m2 = line:match("^[^:]+:[^:]+:([^:]+:%s+)(%d+):(%d+):%s+(.*)")
             if lnum then
-                qfl[#qfl+1] = {bufnr=bufnr, lnum=tonumber(lnum), col=col, text=m1 .. m2, type="E"}
-            else
-                vim.api.nvim_err_writeln(line)
+                return {bufnr=bufnr, lnum=tonumber(lnum), col=col, text=m1 .. m2, type="E"}
             end
-        end
-        show_qfl(qfl)
+        end)
         return
     end
 
-    apply_diff(lines)
+    apply_unified_diff(lines)
 end
 
 return {
